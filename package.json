@@ -1,0 +1,90 @@
+{
+  "name": "RemindHelper",
+  "version": "1.0.0",
+  "description": "提醒助手",
+  "main": "main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MrC0824/RemindHelper.git"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "dist": "pnpm run build && electron-builder && node -e \"const fs=require('fs'); const p=['release/builder-debug.yml', 'release/builder-effective-config.yaml']; p.forEach(f=>{try{fs.unlinkSync(f)}catch(e){}});\"",
+    "release:patch": "pnpm version patch && git push --follow-tags",
+    "release:minor": "pnpm version minor && git push --follow-tags",
+    "release:major": "pnpm version major && git push --follow-tags",
+    "release": "pnpm version patch && git push --follow-tags"
+  },
+  "packageManager": "pnpm@9.0.6",
+  "ciConfig": {
+    "packageManager": "pnpm"
+  },
+  "keywords": [
+    "electron",
+    "react",
+    "reminder"
+  ],
+  "author": "Gemini",
+  "license": "ISC",
+  "dependencies": {
+    "builder-util-runtime": "^9.2.4",
+    "electron-updater": "^6.3.9",
+    "fs-extra": "^11.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.0",
+    "esbuild": "^0.27.0",
+    "typescript": "^5.2.0",
+    "vite": "^5.0.0"
+  },
+  "build": {
+    "appId": "com.sedentary.remindhelper.app",
+    "productName": "RemindHelper",
+    "copyright": "Copyright © 2025 Gemini",
+    "compression": "store",
+    "asar": true,
+    "icon": "public/icon.ico",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "MrC0824",
+        "repo": "Reminder",
+        "releaseType": "release"
+      }
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "public"
+    },
+    "files": [
+      "dist/**/*",
+      "main.js"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "public/icon.ico"
+    },
+    "portable": {
+      "artifactName": "RemindHelper_Portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico",
+      "include": "build/installer.nsh",
+      "artifactName": "${productName}_Setup.exe"
+    }
+  }
+}

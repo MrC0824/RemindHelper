@@ -1,0 +1,5 @@
+{
+  "name": "RemindHelper",
+  "description": "一款现代、美观的定时提醒应用，支持自定义间隔、免打扰时段和声音提醒。",
+  "requestFramePermissions": []
+}
