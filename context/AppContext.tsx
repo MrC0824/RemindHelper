@@ -1,5 +1,3 @@
-
-
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { AppSettings, AppStatus, TimeRange, SoundProfile, CustomReminder, ReminderType, UpdateStatus, UpdateInfo } from '@/types';
 import { isWithinActiveHours, generateId, updateHolidays, isWorkDay } from '@/utils/timeUtils';
@@ -69,8 +67,8 @@ const SILENT_AUDIO_URL = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEA
 const defaultSettings: AppSettings = {
   theme: 'light', 
   intervalUnit: 'minutes',
-  intervalValue: 30,
-  messagePrefix: "已经过了",
+  intervalValue: 60,
+  messagePrefix: "已经忙碌",
   messageSuffix: "了，该休息一下啦！",
   soundEnabled: true,
   activeHoursEnabled: false,
@@ -79,10 +77,10 @@ const defaultSettings: AppSettings = {
       { id: 'default-2', start: "13:00", end: "18:00" }
   ],
   workMode: 'everyday',
-  isBigWeek: true, 
+  isBigWeek: false, 
   skipHolidays: true,
   customReminders: [],
-  audioVolume: 0.5,
+  audioVolume: 1,
   selectedSoundId: SYSTEM_SOUND_ID,
   soundList: [
       { id: SYSTEM_SOUND_ID, name: '默认提示音', type: 'system' }
@@ -154,6 +152,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Ref to track if the current check is manual (initiated by user)
   const isManualCheckRef = useRef(false);
 
+  // Track system resume time for reliable hibernate detection
+  const lastResumeTimeRef = useRef<number>(0);
+  
+  // Track last tick time globally to survive re-renders/useEffect cleanups
+  const lastTickRef = useRef<number>(Date.now());
+
   const [skippedVersions, setSkippedVersions] = useState<string[]>(() => {
       const saved = localStorage.getItem('skipped_versions');
       return saved ? JSON.parse(saved) : [];
@@ -177,6 +181,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [totalTime, setTotalTime] = useState(() => calculateTotalSeconds());
   
   const [customTimerStates, setCustomTimerStates] = useState<Record<string, TimerState>>({});
+  // Use a Ref to track custom timer states synchronously for the setInterval loop
+  const customTimerStatesRef = useRef<Record<string, TimerState>>({});
+
   const [activeAlerts, setActiveAlerts] = useState<Set<string>>(new Set());
   const [notificationSnapshots, setNotificationSnapshots] = useState<Record<string, {title: string, message: string}>>({});
 
@@ -204,6 +211,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
   }, [settings.globalShortcut]);
 
+  // IPC Event Listeners for System Power and Updates
   useEffect(() => {
     if (!ipcRenderer || isNotificationMode) return;
 
@@ -242,11 +250,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsUpdateModalOpen(true);
     };
 
+    // System Power Events
+    const onSystemResume = () => {
+        // Record the time when system resumed.
+        // This allows us to ignore alerts that might trigger immediately after waking up.
+        console.log("System Resumed - Suppressing alerts for 10s");
+        lastResumeTimeRef.current = Date.now();
+    };
+
     ipcRenderer.on('update-available', onUpdateAvailable);
     ipcRenderer.on('update-not-available', onUpdateNotAvailable);
     ipcRenderer.on('download-progress', onDownloadProgress);
     ipcRenderer.on('update-downloaded', onUpdateDownloaded);
     ipcRenderer.on('update-error', onUpdateError);
+    ipcRenderer.on('system-resume', onSystemResume);
 
     return () => {
         ipcRenderer.removeListener('update-available', onUpdateAvailable);
@@ -254,6 +271,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ipcRenderer.removeListener('download-progress', onDownloadProgress);
         ipcRenderer.removeListener('update-downloaded', onUpdateDownloaded);
         ipcRenderer.removeListener('update-error', onUpdateError);
+        ipcRenderer.removeListener('system-resume', onSystemResume);
     };
   }, [skippedVersions, updateStatus]);
 
@@ -462,18 +480,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const triggerAlert = useCallback((sourceId: string): boolean => {
-    // 如果主提醒的时间数值为空或非法，不触发弹窗
     if (sourceId === 'main') {
-        const val = settingsRef.current.intervalValue;
-        // Fix: Cast val to any to allow check for empty string which can happen at runtime
-        if ((val as any) === '' || isNaN(Number(val)) || Number(val) <= 0) {
+        const { intervalValue, messagePrefix, messageSuffix } = settingsRef.current;
+        
+        // 校验：如果两个文案都为空，不允许触发提醒
+        const hasText = (messagePrefix || '').trim().length > 0 || (messageSuffix || '').trim().length > 0;
+        
+        const val = intervalValue;
+        const hasInterval = (val as any) !== '' && !isNaN(Number(val)) && Number(val) > 0;
+        
+        if (!hasInterval || !hasText) {
             return false;
         }
     }
 
     stopPreviewAudio(); 
 
-    // Snapshot current title/message so subsequent edits don't change displayed notification
     let msg = '';
     let title = '';
     let type: 'main' | 'interval' | 'onetime' = 'main'; 
@@ -503,7 +525,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
     }
 
-    // Save snapshot
     setNotificationSnapshots(prev => ({
         ...prev,
         [sourceId]: { title, message: msg }
@@ -538,7 +559,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = Date.now();
     
     const reminder = settings.customReminders.find(r => r.id === id);
-    // Logic for Onetime: Remove it if expired
     if (reminder && reminder.type === 'onetime') {
         if (reminder.targetDateTime && reminder.targetDateTime <= now + 1000) {
             setSettings(prev => ({
@@ -548,7 +568,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
     }
 
-    // Clear snapshot
     setNotificationSnapshots(prev => {
         const next = { ...prev };
         delete next[id];
@@ -559,7 +578,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const newSet = new Set(prev);
         newSet.delete(id);
         
-        // Stop audio if no alerts remaining
         if (newSet.size === 0) {
              if (audioRef.current) {
                 audioRef.current.pause();
@@ -574,7 +592,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ipcRenderer.send('dismiss-notification', { id });
     }
     
-    // For 'main' timer, we still use the "wait for dismiss" logic
     if (id === 'main') {
         const total = calculateTotalSeconds();
         setTotalTime(total);
@@ -600,19 +617,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isNotificationMode) return;
     const prevReminders = prevRemindersRef.current;
     
-    setCustomTimerStates(prev => {
-      const next = { ...prev };
-      let changed = false;
-      const now = Date.now();
+    // Calculate new states logic...
+    const nextStates: Record<string, TimerState> = { ...customTimerStatesRef.current };
+    let changed = false;
+    const now = Date.now();
 
-      Object.keys(next).forEach(id => {
+    // 1. Clean up removed reminders from state
+    Object.keys(nextStates).forEach(id => {
         if (!settings.customReminders.find(r => r.id === id)) { 
-            delete next[id]; 
+            delete nextStates[id]; 
             changed = true; 
         }
-      });
+    });
 
-      settings.customReminders.forEach(r => {
+    // 2. Initialize or Update states for current reminders
+    settings.customReminders.forEach(r => {
         const prevR = prevReminders.find(pr => pr.id === r.id);
         const isNew = !prevR;
         const wasDisabled = prevR && !prevR.enabled && r.enabled;
@@ -625,12 +644,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
         
         if (r.enabled) {
-            if (isNew || wasDisabled || configChanged || !next[r.id] || (r.type === 'interval' && next[r.id].endTime === null && next[r.id].timeLeft === 0)) {
+            if (isNew || wasDisabled || configChanged || !nextStates[r.id] || (r.type === 'interval' && nextStates[r.id].endTime === null && nextStates[r.id].timeLeft === 0)) {
                  if (r.type === 'onetime' && r.targetDateTime) {
                      const tLeft = Math.max(0, Math.ceil((r.targetDateTime - now) / 1000));
-                     next[r.id] = { timeLeft: tLeft, endTime: r.targetDateTime ?? null };
+                     nextStates[r.id] = { timeLeft: tLeft, endTime: r.targetDateTime ?? null };
                  } else {
-                     // Interval type
                      let endTime = 0;
                      let timeLeft = 0;
                      
@@ -646,19 +664,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                          timeLeft = total;
                      }
 
-                     next[r.id] = { timeLeft, endTime };
+                     nextStates[r.id] = { timeLeft, endTime };
                  }
                  changed = true;
             }
         } else {
-            if (next[r.id] && next[r.id].endTime !== null) {
-                next[r.id] = { timeLeft: 0, endTime: null };
+            if (nextStates[r.id] && nextStates[r.id].endTime !== null) {
+                nextStates[r.id] = { timeLeft: 0, endTime: null };
                 changed = true;
             }
         }
-      });
-      return changed ? next : prev;
     });
+
+    if (changed) {
+        setCustomTimerStates(nextStates);
+        customTimerStatesRef.current = nextStates;
+    }
     
     prevRemindersRef.current = settings.customReminders;
   }, [settings.customReminders]);
@@ -694,63 +715,142 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     prevActiveHoursEnabled.current = settings.activeHoursEnabled;
 
+    // Use persisted ref instead of local variable
+    // This prevents sleep detection from breaking when useEffect re-runs on wake
+    // but ensures we don't start with a stale timestamp from the previous mount if unintended
+    // However, for sleep detection, we WANT to compare against the last actual execution time.
+    
+    // NOTE: We don't reset lastTickRef here. It persists its value from the last render/tick.
+    // This is crucial for detecting sleep across re-renders.
+
     timerRef.current = window.setInterval(() => {
         const now = Date.now();
+        // Calculate delta using the persisted ref
+        const delta = now - lastTickRef.current;
+        lastTickRef.current = now; // Update immediately
+
+        // --- System Sleep Detection ---
+        // 1. Tick Delta Check (Backup): If timer loop was paused for > 2000ms
+        const tickDelaySlept = delta > 2000;
+        
+        // 2. PowerMonitor Resume Check (Primary): Check if we are within 10s of a system resume event
+        const resumeTimeDiff = now - lastResumeTimeRef.current;
+        const powerMonitorJustResumed = resumeTimeDiff < 10000; // 10s grace period
+
+        const systemSlept = tickDelaySlept || powerMonitorJustResumed;
+
+        // --- Safety: Stop all audio if system slept ---
+        if (systemSlept) {
+             if (audioRef.current) {
+                 audioRef.current.pause();
+                 audioRef.current.currentTime = 0;
+             }
+             if (silentAudioRef.current) {
+                 silentAudioRef.current.pause();
+             }
+             stopPreviewAudio();
+        }
+
         const alertsToTrigger: string[] = [];
         const remindersToUpdate: {id: string, nextTime: number}[] = [];
+        const remindersToRemove: string[] = []; // To collect IDs of expired one-time reminders that were skipped
 
         // Custom Reminders Logic
-        setCustomTimerStates(prev => {
-            const next = { ...prev };
-            let stateChanged = false;
+        // Use synchronous Ref instead of async state update
+        const prevStates = customTimerStatesRef.current;
+        const nextStates = { ...prevStates };
+        let stateChanged = false;
 
-            settings.customReminders.forEach(r => {
-                if (!r.enabled) return;
-                const st = next[r.id];
-                if (!st || !st.endTime) return;
-                const diff = Math.ceil((st.endTime - now) / 1000);
+        settings.customReminders.forEach(r => {
+            if (!r.enabled) return;
+            const st = nextStates[r.id];
+            if (!st || !st.endTime) return;
+            const diff = Math.ceil((st.endTime - now) / 1000);
+            
+            if (diff <= 0) {
+                let shouldAlert = true;
                 
-                if (diff <= 0) {
-                    alertsToTrigger.push(r.id);
-
-                    if (r.type === 'interval') {
-                        let multiplier = 60;
-                        if (r.intervalUnit === 'hours') multiplier = 3600;
-                        if (r.intervalUnit === 'seconds') multiplier = 1;
-                        const total = (r.intervalValue || 0) * multiplier;
-                        const nextTime = now + total * 1000;
-                        
-                        next[r.id] = { timeLeft: total, endTime: nextTime };
-                        remindersToUpdate.push({ id: r.id, nextTime });
-                    } else {
-                        next[r.id] = { timeLeft: 0, endTime: null };
-                    }
-                    stateChanged = true;
-                } else {
-                    if (next[r.id].timeLeft !== diff) { next[r.id].timeLeft = diff; stateChanged = true; }
+                // Sleep/Hibernate Check Logic:
+                // If the timer expired while the system was sleeping, do NOT alert.
+                // Instead, silently skip this cycle (and if it's one-time, remove it).
+                if (systemSlept) {
+                    shouldAlert = false;
                 }
-            });
-            return stateChanged ? next : prev;
+                
+                // Extra fallback: if timer is way overdue (>5s), also assume sleep
+                if (Math.abs(diff) > 5) {
+                        shouldAlert = false;
+                }
+
+                if (shouldAlert) {
+                    alertsToTrigger.push(r.id);
+                } else {
+                    // Logic: If it was a one-time reminder and we decided to SKIP alerting (due to sleep),
+                    // it is effectively "expired and missed". We should remove it from the list
+                    // so it doesn't just sit there forever (or reappear unexpectedly).
+                    if (r.type === 'onetime') {
+                        remindersToRemove.push(r.id);
+                    }
+                }
+
+                if (r.type === 'interval') {
+                    let multiplier = 60;
+                    if (r.intervalUnit === 'hours') multiplier = 3600;
+                    if (r.intervalUnit === 'seconds') multiplier = 1;
+                    const totalMs = (r.intervalValue || 0) * multiplier * 1000;
+                    
+                    // Calculate next time. 
+                    const nextTime = now + totalMs;
+                    
+                    nextStates[r.id] = { timeLeft: totalMs / 1000, endTime: nextTime };
+                    remindersToUpdate.push({ id: r.id, nextTime });
+                } else {
+                    nextStates[r.id] = { timeLeft: 0, endTime: null };
+                }
+                stateChanged = true;
+            } else {
+                if (nextStates[r.id].timeLeft !== diff) { nextStates[r.id].timeLeft = diff; stateChanged = true; }
+            }
         });
         
+        if (stateChanged) {
+            setCustomTimerStates(nextStates);
+            customTimerStatesRef.current = nextStates;
+        }
+        
         // Execute Side Effects
-        if (alertsToTrigger.length > 0) {
+        if (alertsToTrigger.length > 0 || remindersToUpdate.length > 0 || remindersToRemove.length > 0) {
             setTimeout(() => {
+                 // 1. Trigger alerts
                  alertsToTrigger.forEach(id => triggerAlert(id));
-                 if (remindersToUpdate.length > 0) {
-                     const currentReminders = settingsRef.current.customReminders;
-                     let changed = false;
-                     const newReminders = currentReminders.map(r => {
-                         const update = remindersToUpdate.find(u => u.id === r.id);
-                         if (update) {
-                             changed = true;
-                             return { ...r, nextTriggerTime: update.nextTime };
+
+                 // 2. Batch update settings (Update next times OR Remove expired/skipped onetime reminders)
+                 if (remindersToUpdate.length > 0 || remindersToRemove.length > 0) {
+                     setSettings(prev => {
+                         let currentReminders = [...prev.customReminders];
+                         let changed = false;
+
+                         // Handle Removals (Skipped One-time)
+                         if (remindersToRemove.length > 0) {
+                             const initialLen = currentReminders.length;
+                             currentReminders = currentReminders.filter(r => !remindersToRemove.includes(r.id));
+                             if (currentReminders.length !== initialLen) changed = true;
                          }
-                         return r;
+
+                         // Handle Updates (Interval Next Time)
+                         if (remindersToUpdate.length > 0) {
+                             currentReminders = currentReminders.map(r => {
+                                 const update = remindersToUpdate.find(u => u.id === r.id);
+                                 if (update) {
+                                     changed = true;
+                                     return { ...r, nextTriggerTime: update.nextTime };
+                                 }
+                                 return r;
+                             });
+                         }
+                         
+                         return changed ? { ...prev, customReminders: currentReminders } : prev;
                      });
-                     if (changed) {
-                         setSettings(prev => ({ ...prev, customReminders: newReminders }));
-                     }
                  }
             }, 0);
         }
@@ -786,22 +886,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } 
 
         if (shouldTickMainTimer) {
-            if (endTime) {
-                const diff = Math.ceil((endTime - now) / 1000);
-                if (diff <= 0) { 
-                    setTimeLeft(0);
-                    if (activeAlerts.has('main')) {
-                        // Pause
-                    } else {
-                        // 如果间隔数值未设置（为空），不触发弹窗
-                        const currentVal = settingsRef.current.intervalValue;
-                        // Fix: Cast currentVal to any to allow check for empty string which can happen at runtime
-                        if ((currentVal as any) !== '' && !isNaN(Number(currentVal)) && Number(currentVal) > 0) {
-                            triggerAlert('main');
+            const { intervalValue, intervalUnit, messagePrefix, messageSuffix } = settingsRef.current;
+            const hasText = (messagePrefix || '').trim().length > 0 || (messageSuffix || '').trim().length > 0;
+            const hasInterval = (intervalValue as any) !== '' && !isNaN(Number(intervalValue)) && Number(intervalValue) > 0;
+
+            if (!hasInterval) {
+                // 3个值都没维护（或仅间隔没维护），运行中状态，显示00:00:00
+                setTimeLeft(0);
+                setEndTime(null);
+            } else if (!hasText) {
+                // 提醒间隔有值，但两个文案都没值，运行中状态，显示具体间隔数值，但不倒计时
+                let multiplier = 60;
+                if (intervalUnit === 'hours') multiplier = 3600;
+                if (intervalUnit === 'seconds') multiplier = 1;
+                const total = Number(intervalValue) * multiplier;
+                setTimeLeft(total);
+                setEndTime(null); // 不设置 endTime，防止倒计时
+            } else {
+                // 正常配置，进行倒计时
+                if (endTime) {
+                    const diff = Math.ceil((endTime - now) / 1000);
+                    if (diff <= 0) { 
+                        // Main Timer Sleep/Wake Check
+                        let shouldAlertMain = true;
+                        
+                        if (systemSlept) {
+                            shouldAlertMain = false;
                         }
+                        if (Math.abs(diff) > 5) {
+                            shouldAlertMain = false;
+                        }
+
+                        if (shouldAlertMain) {
+                            if (activeAlerts.has('main')) {
+                                // Pause
+                            } else {
+                                // triggerAlert 内部已经做了校验，如果还是漏网之鱼，这里不需额外判断
+                                triggerAlert('main');
+                            }
+                            setTimeLeft(0);
+                        } else {
+                            // Reset main timer silently (Sleep case)
+                            const total = calculateTotalSeconds();
+                            const nextMainEnd = now + total * 1000;
+                            setEndTime(nextMainEnd);
+                            setTimeLeft(total);
+                        }
+                    } else {
+                        setTimeLeft(diff);
                     }
                 } else {
-                    setTimeLeft(diff);
+                    // 如果从无文案状态切换到有文案状态（且未暂停），需要重新开始计时
+                    // 使用当前 timeLeft 作为剩余时间继续
+                    const diff = timeLeft;
+                    if (diff > 0) {
+                        setEndTime(now + diff * 1000);
+                    }
                 }
             }
         }

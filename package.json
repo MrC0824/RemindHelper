@@ -1,6 +1,6 @@
 {
   "name": "RemindHelper",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "提醒助手",
   "main": "main.js",
   "repository": {
@@ -46,7 +46,7 @@
     "vite": "^5.0.0"
   },
   "build": {
-    "appId": "com.sedentary.remindhelper.app",
+    "appId": "com.sedentary.reminder.app",
     "productName": "RemindHelper",
     "copyright": "Copyright © 2025 Gemini",
     "compression": "store",
@@ -56,7 +56,7 @@
       {
         "provider": "github",
         "owner": "MrC0824",
-        "repo": "Reminder",
+        "repo": "RemindHelper",
         "releaseType": "release"
       }
     ],

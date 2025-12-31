@@ -447,17 +447,20 @@ export const SettingsPanel: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // 当进入编辑模式时，自动滚动到对应的编辑区域
+  // Monitor editing item existence. If removed (e.g. one-time reminder expired), reset edit mode.
   useEffect(() => {
       if (editingId) {
-          requestAnimationFrame(() => {
-              const el = document.getElementById(`editing-reminder-${editingId}`);
-              if (el) {
-                  el.scrollIntoView({ block: 'center' });
-              }
-          });
+          const exists = settings.customReminders.some(r => r.id === editingId);
+          if (!exists) {
+              setEditingId(null);
+              setNewReminderTitle('');
+              setNewReminderValue('');
+              setNewReminderDateTime('');
+              setNewReminderType('interval');
+              setAlertMsg(null);
+          }
       }
-  }, [editingId]);
+  }, [settings.customReminders, editingId]);
 
   // Fetch version from main process
   useEffect(() => {
@@ -877,7 +880,7 @@ export const SettingsPanel: React.FC = () => {
 
         <div className="p-6 border-b border-gray-200 dark:border-slate-700/50 bg-white dark:bg-slate-800 flex-shrink-0 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <span>⚙️</span> 参数配置
+                <span>⚙️</span> 设置
             </h2>
             <div className="flex items-center gap-3">
                  {ipcRenderer && updateStatus === 'checking' && <span className="text-xs text-slate-500 animate-pulse">正在检查...</span>}
@@ -900,7 +903,7 @@ export const SettingsPanel: React.FC = () => {
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-8 pb-24">
             {/* 1. 外观设置 */}
             <div className="space-y-4">
-                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">外观设置</label>
+                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">外观</label>
                 <div className="flex gap-2">
                     {themes.map(t => (
                         <button
@@ -972,7 +975,7 @@ export const SettingsPanel: React.FC = () => {
                 <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">主提醒 (循环)</label>
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="text-xs text-slate-500 mb-1 block font-medium">提醒间隔数值</label>
+                        <label className="text-xs text-slate-500 mb-1 block font-medium">间隔时长</label>
                         {/* 替换为 CustomNumberInput */}
                         <CustomNumberInput 
                             value={settings.intervalValue} 
@@ -1071,7 +1074,7 @@ export const SettingsPanel: React.FC = () => {
                                 </div>
                                 {/* 如果正在编辑当前项，在下方显示编辑框 */}
                                 {isEditingThis && (
-                                    <div id={`editing-reminder-${reminder.id}`} className="mt-2 animate-fade-in">
+                                    <div id={`editing-reminder-${reminder.id}`} className="mt-2">
                                         {renderReminderForm()}
                                     </div>
                                 )}
@@ -1090,7 +1093,7 @@ export const SettingsPanel: React.FC = () => {
                 <div className="bg-gray-50/50 dark:bg-slate-900/30 rounded-xl border border-gray-200 dark:border-slate-700/50 p-4 space-y-4">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">启用时段限制</p>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">启用托管模式</p>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">仅在下列指定时间段内运行</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
@@ -1163,7 +1166,7 @@ export const SettingsPanel: React.FC = () => {
 
             {/* 6. 声音设置 */}
             <div className="space-y-4">
-                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">声音设置</label>
+                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">声音</label>
                 <div className="bg-gray-50/50 dark:bg-slate-900/30 rounded-xl border border-gray-200 dark:border-slate-700/50 p-4 space-y-4">
                     <div className="flex items-center justify-between">
                         <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">开启声音提醒</span>

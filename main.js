@@ -1,5 +1,6 @@
 
-const { app, BrowserWindow, Notification, Tray, Menu, ipcMain, nativeImage, powerSaveBlocker, screen, dialog, shell, globalShortcut } = require('electron');
+
+const { app, BrowserWindow, Notification, Tray, Menu, ipcMain, nativeImage, powerSaveBlocker, screen, dialog, shell, globalShortcut, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -304,6 +305,33 @@ function createWindow() {
   });
 }
 
+// --- Power Monitor Events (Sleep/Wake) ---
+app.whenReady().then(() => {
+  createWindow();
+  createTray();
+  
+  // Power Monitor Listeners
+  powerMonitor.on('suspend', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('system-suspend');
+    }
+  });
+
+  powerMonitor.on('resume', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('system-resume');
+    }
+  });
+  
+  screen.on('display-metrics-changed', () => { repositionAllNotifications(); });
+  screen.on('work-area-added', () => { repositionAllNotifications(); });
+  screen.on('work-area-removed', () => { repositionAllNotifications(); });
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
 // --- AutoUpdater Events ---
 
 autoUpdater.on('update-available', (info) => {
@@ -358,21 +386,6 @@ autoUpdater.on('error', (err) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-error', err.message);
     }
-});
-
-app.whenReady().then(() => {
-  createWindow();
-  createTray();
-  
-  // 统一由前端 AppContext 在加载完成后发起检查，方便控制 isManualCheckRef 状态
-  
-  screen.on('display-metrics-changed', () => { repositionAllNotifications(); });
-  screen.on('work-area-added', () => { repositionAllNotifications(); });
-  screen.on('work-area-removed', () => { repositionAllNotifications(); });
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
 });
 
 app.on('will-quit', () => {

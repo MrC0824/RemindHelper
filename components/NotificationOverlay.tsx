@@ -72,7 +72,7 @@ export const NotificationOverlay: React.FC = () => {
                     <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">{displayTitle}</h3>
                     <div className="w-full px-2 mb-6 relative max-h-32 overflow-y-auto custom-scrollbar break-all">
                         <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed font-medium whitespace-pre-wrap">
-                           {(displayMessage || "已经专注很久啦，休息一下吧！").replace(/\\n/g, '\n')}
+                           {(displayMessage || "").replace(/\\n/g, '\n')}
                         </p>
                     </div>
                     <button 
