@@ -1,0 +1,127 @@
+name: Dynamic Release Automation 🚀
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    permissions:
+      contents: write # 必须有这个权限才能推送代码回仓库
+
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 获取完整历史，确保能切换分支
+
+      # ----------------------------------------------------
+      # 1. 环境配置与检测
+      # ----------------------------------------------------
+      - name: 🔍 Get Package Manager
+        id: get_config
+        shell: bash
+        run: |
+          PACKAGE_MANAGER=$(jq -r '.ciConfig.packageManager' package.json)
+          echo "PACKAGE_MANAGER=$PACKAGE_MANAGER" >> $GITHUB_ENV
+
+      - name: 🛠️ Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: ⚙️ Enable Corepack
+        if: ${{ env.PACKAGE_MANAGER == 'pnpm' }}
+        shell: bash
+        run: corepack enable pnpm
+
+      # ----------------------------------------------------
+      # 2. 依赖缓存与安装
+      # ----------------------------------------------------
+      - name: 📥 Cache dependencies
+        uses: actions/cache@v4
+        if: ${{ env.PACKAGE_MANAGER == 'pnpm' }}
+        with:
+          path: ~\AppData\Local\pnpm\store\v3
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: 📦 Install Dependencies
+        shell: powershell
+        run: |
+          if ("${{ env.PACKAGE_MANAGER }}" -eq "pnpm") {
+            pnpm install --frozen-lockfile --store-dir "$env:AppData\Local\pnpm\store\v3"
+          } elseif ("${{ env.PACKAGE_MANAGER }}" -eq "npm") {
+            npm install
+          }
+
+      # ----------------------------------------------------
+      # 3. 同步 Tag 版本号用于构建
+      # ----------------------------------------------------
+      - name: 🔄 Temp Sync Version for Build
+        shell: powershell
+        run: |
+          $tagName = "${{ github.ref_name }}"
+          $version = $tagName -replace "^v", ""
+          Write-Host "Temp bumping package.json to: $version for release build"
+          npm version $version --no-git-tag-version --allow-same-version
+
+      # ----------------------------------------------------
+      # 4. 执行构建与发布流程
+      # ----------------------------------------------------
+      - name: 🚀 Build and Publish
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ("${{ env.PACKAGE_MANAGER }}" -eq "pnpm") {
+            pnpm run dist
+          } elseif ("${{ env.PACKAGE_MANAGER }}" -eq "npm") {
+            npm run dist
+          } else {
+            Write-Error "Unknown package manager configured in ciConfig"
+            exit 1
+          }
+
+      # ----------------------------------------------------
+      # 5. 自动将版本号写回主分支 (Sync Back)
+      # ----------------------------------------------------
+      - name: 💾 Sync Version Back to Repo
+        if: success() # 只有构建发布成功了才执行这一步
+        shell: bash   # 使用 bash 方便处理 git 命令
+        run: |
+          # 配置机器人身份
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 获取纯数字版本号 (去掉 v)
+          TAG_NAME="${{ github.ref_name }}"
+          VERSION=${TAG_NAME#v}
+          echo "Target Version to write back: $VERSION"
+
+          # 切换回主分支 (Tag 是分离头指针，必须切回主分支才能提交)
+          # 注意：如果是 master 分支，请把下面的 main 改为 master
+          git fetch origin main
+          git checkout main
+          git pull origin main
+
+          # 再次修改 package.json (因为切换分支后文件被还原了)
+          npm version $VERSION --no-git-tag-version --allow-same-version
+
+          # 提交并推送
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "Version changed. Committing..."
+            git add package.json
+            
+            # [skip ci] 很重要，防止这次提交又触发新的构建循环
+            git commit -m "chore: auto bump version to $VERSION [skip ci]"
+            
+            git push origin main
+            echo "✅ Successfully synced version back to main branch!"
+          else
+            echo "Version is already up to date."
+          fi
