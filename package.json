@@ -1,6 +1,6 @@
 {
   "name": "RemindHelper",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "提醒助手",
   "main": "main.js",
   "repository": {
@@ -11,7 +11,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "dist": "pnpm run build && electron-builder && node -e \"const fs=require('fs'); const p=['release/builder-debug.yml', 'release/builder-effective-config.yaml']; p.forEach(f=>{try{fs.unlinkSync(f)}catch(e){}});\"",
+    "dist": "pnpm run build && electron-builder && node -e \"const fs=require('fs'); const p=['release/builder-debug.yml', 'release/builder-effective-config.yaml']; const d='release/win-unpacked'; p.forEach(f=>{try{fs.unlinkSync(f)}catch(e){}}); try{fs.rmSync(d, {recursive:true, force:true})}catch(e){}\"",
     "release:patch": "pnpm version patch && git push --follow-tags",
     "release:minor": "pnpm version minor && git push --follow-tags",
     "release:major": "pnpm version major && git push --follow-tags",
@@ -79,7 +79,7 @@
       "icon": "public/icon.ico"
     },
     "portable": {
-      "artifactName": "RemindHelper_Portable.exe"
+      "artifactName": "${productName}_Portable.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -87,7 +87,7 @@
       "installerIcon": "public/icon.ico",
       "uninstallerIcon": "public/icon.ico",
       "include": "build/installer.nsh",
-      "artifactName": "${productName}_Setup.exe"
+      "artifactName": "${productName}_Setup.${ext}"
     }
   }
 }
