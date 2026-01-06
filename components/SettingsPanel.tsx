@@ -934,6 +934,11 @@ export const SettingsPanel: React.FC = () => {
     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700/50 h-full flex flex-col overflow-hidden transition-colors duration-300">
         {/* === 全局 CSS 注入 === */}
         <style>{`
+            /* 移除焦点时的默认边框 */
+            *:focus, *:focus-visible {
+                outline: none !important;
+            }
+
             .custom-time-input::-webkit-calendar-picker-indicator {
                 position: absolute;
                 top: 0;
@@ -989,7 +994,7 @@ export const SettingsPanel: React.FC = () => {
 
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-8 pb-24">
             
-            {/* 1. 系统设置 (合并了原外观、自启动、快捷键) */}
+            {/* 1. 系统 (合并了原外观、自启动、快捷键) */}
             <div className="space-y-4">
                 {/* 标题栏 - 点击可切换折叠状态 */}
                 <div 
@@ -997,7 +1002,7 @@ export const SettingsPanel: React.FC = () => {
                     className="flex items-center justify-between cursor-pointer group border-b border-gray-200 dark:border-slate-700 pb-2 select-none"
                 >
                     <label className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                        系统设置
+                        系统项
                     </label>
                     <div className={`text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-transform duration-200 ${isSystemSettingsOpen ? 'rotate-180' : ''}`}>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1015,7 +1020,7 @@ export const SettingsPanel: React.FC = () => {
                             <>
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">开机自启动</p>
+                                        <p className="text-sm font-medium text-slate-800 dark:text-slate-100">开机自启动</p>
                                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">登录系统后自动运行应用</p>
                                     </div>
                                     <label className="relative inline-flex items-center cursor-pointer">
@@ -1027,10 +1032,10 @@ export const SettingsPanel: React.FC = () => {
                             </>
                         )}
 
-                        {/* 1.2 外观设置 (通用) */}
+                        {/* 1.2 外观 (通用) */}
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">外观风格</p>
+                                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">外观风格</p>
                                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">切换应用显示的色彩主题</p>
                             </div>
                             <div className="flex gap-2">
@@ -1058,7 +1063,7 @@ export const SettingsPanel: React.FC = () => {
                                 
                                 <div className="flex flex-col gap-2">
                                     <div className="flex justify-between items-center mb-1">
-                                        <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">全局快捷键</span>
+                                        <span className="text-sm font-medium text-slate-800 dark:text-slate-100">全局快捷键</span>
                                         <span className="text-[10px] text-slate-400">一键显示/隐藏主界面</span>
                                     </div>
                                     
