@@ -534,7 +534,7 @@ const MainView: React.FC = () => {
                       <div className="transform scale-90 md:scale-100 transition-transform duration-300"><CircularTimer timeLeft={timeLeft} totalTime={totalTime} status={status} /></div>
                       {!settings.activeHoursEnabled && (
                           <div className={`flex flex-col items-center gap-4 z-10 transition-opacity duration-300 ${status === 'alert_active' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                              <button onClick={toggleTimer} className={`px-10 py-3 rounded-2xl font-semibold text-lg shadow-xl transition-all transform hover:scale-105 active:scale-95 ${(status === 'running' || status === 'alert_active') ? 'bg-amber-100 text-amber-600 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-blue-500/30'}`}>{(status === 'running' || status === 'alert_active') ? '暂停' : (status === 'paused' ? '继续' : '启动提醒')}</button>
+                              <button onClick={toggleTimer} className={`px-10 py-3 rounded-2xl font-semibold text-lg shadow-xl transition-all transform hover:scale-105 active:scale-95 ${(status === 'running' || status === 'alert_active') ? 'bg-amber-100 text-amber-600 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-blue-500/30'}`}>{(status === 'running' || status === 'alert_active') ? '暂停' : (status === 'paused' ? '继续' : '启动')}</button>
                           </div>
                       )}
                       {settings.activeHoursEnabled && (<div className="text-sm text-slate-400 dark:text-slate-500 animate-pulse">已启用时段托管，正在自动运行中...</div>)}
