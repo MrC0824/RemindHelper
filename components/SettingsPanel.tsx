@@ -497,6 +497,66 @@ export const SettingsPanel: React.FC = () => {
 
   const settingsRef = useRef(settings);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
+  
+  // === 全局 CSS 注入 (Persistent & Aggressive) ===
+  useEffect(() => {
+      const styleId = 'global-ui-fix';
+      const cssContent = `
+          /* 强制移除所有元素的焦点边框/阴影/Ring，并禁止过渡动画以防止闪烁 */
+          *, *::before, *::after {
+             outline: none !important;
+             --tw-ring-offset-width: 0px !important;
+             --tw-ring-color: transparent !important;
+             --tw-ring-shadow: none !important;
+             -webkit-tap-highlight-color: transparent;
+          }
+
+          /* 针对聚焦状态的加强清除 */
+          *:focus, *:focus-visible, *:active {
+              outline: none !important;
+              outline-style: none !important;
+              outline-width: 0px !important;
+              box-shadow: none !important;
+              -webkit-focus-ring-color: transparent !important;
+          }
+
+          /* 修复 Electron/Chrome 默认行为 */
+          body {
+            -webkit-font-smoothing: antialiased;
+          }
+
+          .custom-time-input::-webkit-calendar-picker-indicator {
+              position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+              width: 100%; height: 100%; opacity: 0; cursor: pointer; background: transparent;
+          }
+          /* 隐藏滚动条 */
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+          /* 隐藏数字输入框箭头 */
+          .no-spinners::-webkit-outer-spin-button,
+          .no-spinners::-webkit-inner-spin-button {
+              -webkit-appearance: none; margin: 0;
+          }
+          .no-spinners { -moz-appearance: textfield; }
+      `;
+
+      let styleEl = document.getElementById(styleId);
+      
+      // 如果标签已存在，更新内容（处理开发环境热更新导致旧样式残留的问题）
+      // 如果标签不存在，创建并追加
+      if (!styleEl) {
+          styleEl = document.createElement('style');
+          styleEl.id = styleId;
+          document.head.appendChild(styleEl);
+      }
+      
+      // 始终更新内容以确保最新规则生效
+      if (styleEl.innerHTML !== cssContent) {
+          styleEl.innerHTML = cssContent;
+      }
+
+      // 注意：这里有意不返回 cleanup 函数，确保样式在 SettingsPanel 卸载后依然保留
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -932,44 +992,6 @@ export const SettingsPanel: React.FC = () => {
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700/50 h-full flex flex-col overflow-hidden transition-colors duration-300">
-        {/* === 全局 CSS 注入 === */}
-        <style>{`
-            /* 移除焦点时的默认边框 */
-            *:focus, *:focus-visible {
-                outline: none !important;
-            }
-
-            .custom-time-input::-webkit-calendar-picker-indicator {
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                width: 100%;
-                height: 100%;
-                opacity: 0;
-                cursor: pointer;
-                background: transparent;
-            }
-            /* 隐藏滚动条 (兼容 Chrome/Safari/Firefox/IE) */
-            .no-scrollbar::-webkit-scrollbar {
-                display: none;
-            }
-            .no-scrollbar {
-                -ms-overflow-style: none;  /* IE and Edge */
-                scrollbar-width: none;  /* Firefox */
-            }
-            /* 隐藏原生 Number Input 的上下箭头 */
-            .no-spinners::-webkit-outer-spin-button,
-            .no-spinners::-webkit-inner-spin-button {
-                -webkit-appearance: none;
-                margin: 0;
-            }
-            .no-spinners {
-                -moz-appearance: textfield;
-            }
-        `}</style>
-
         <div className="p-6 border-b border-gray-200 dark:border-slate-700/50 bg-white dark:bg-slate-800 flex-shrink-0 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <span>⚙️</span> 设置
@@ -1262,11 +1284,29 @@ export const SettingsPanel: React.FC = () => {
                             </div>
 
                             {settings.workMode === 'big-small' && (
-                                <div className="flex items-center justify-between gap-3 p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700/50">
+                                <div className="flex items-center justify-between gap-3 h-[38px] px-3 bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700/50">
                                     <span className="text-xs text-slate-500 font-medium shrink-0">当前周状态</span>
                                     <div className="flex gap-2 ml-auto">
-                                        <button onClick={() => updateSettings({ isBigWeek: true })} className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 ${settings.isBigWeek ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 ring-1 ring-blue-200' : 'text-slate-400'}`}>大周 (周六班)</button>
-                                        <button onClick={() => updateSettings({ isBigWeek: false })} className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 ${!settings.isBigWeek ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 ring-1 ring-blue-200' : 'text-slate-400'}`}>小周 (周六休)</button>
+                                        <button 
+                                            onClick={() => updateSettings({ isBigWeek: true })} 
+                                            className={`py-1.5 px-3 rounded-lg border text-xs font-medium transition-all shrink-0 ${
+                                                settings.isBigWeek 
+                                                ? 'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-400' 
+                                                : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700'
+                                            }`}
+                                        >
+                                            大周 (周六班)
+                                        </button>
+                                        <button 
+                                            onClick={() => updateSettings({ isBigWeek: false })} 
+                                            className={`py-1.5 px-3 rounded-lg border text-xs font-medium transition-all shrink-0 ${
+                                                !settings.isBigWeek 
+                                                ? 'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-400' 
+                                                : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700'
+                                            }`}
+                                        >
+                                            小周 (周六休)
+                                        </button>
                                     </div>
                                 </div>
                             )}

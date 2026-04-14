@@ -1,5 +1,4 @@
 
-
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { AppSettings, AppStatus, TimeRange, SoundProfile, CustomReminder, ReminderType, UpdateStatus, UpdateInfo } from '@/types';
 import { isWithinActiveHours, generateId, updateHolidays, isWorkDay } from '@/utils/timeUtils';
@@ -751,8 +750,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         lastTickRef.current = now; // Update immediately
 
         // --- System Sleep Detection ---
-        // 1. Tick Delta Check (Backup): If timer loop was paused for > 2000ms
-        const tickDelaySlept = delta > 2000;
+        // 1. Tick Delta Check (Backup): If timer loop was paused for > 1000ms
+        const tickDelaySlept = delta > 1000;
         
         // 2. PowerMonitor Resume Check (Primary): Check if we are within 10s of a system resume event
         const resumeTimeDiff = now - lastResumeTimeRef.current;
@@ -794,15 +793,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 // Sleep/Hibernate Check Logic:
                 // If the timer expired while the system was sleeping, do NOT alert.
                 // Instead, silently skip this cycle (and if it's one-time, remove it).
-                if (systemSlept) {
+                
+                // Fix: 增加严重过期检测 (例如 > 3秒)
+                // 如果用户早上打开电脑，发现 diff 是负数且很大（比如 -30000秒），说明是昨天的任务，不应该立即响铃
+                const isOverdue = diff < -3;
+
+                if (systemSlept || isOverdue) {
                     shouldAlert = false;
+                    console.log(`[Timer] Skipping alert for ${r.title} (Slept: ${systemSlept}, Overdue: ${diff}s)`);
                 }
                 
-                // Extra fallback: if timer is way overdue (>5s), also assume sleep
-                if (Math.abs(diff) > 5) {
-                        shouldAlert = false;
-                }
-
                 if (shouldAlert) {
                     alertsToTrigger.push(r.id);
                 } else {
@@ -820,10 +820,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     if (r.intervalUnit === 'seconds') multiplier = 1;
                     const totalMs = (r.intervalValue || 0) * multiplier * 1000;
                     
-                    // Calculate next time. 
-                    const nextTime = now + totalMs;
+                    // Fix: 优化下一次时间的计算，防止周期漂移
+                    // 旧逻辑：const nextTime = now + totalMs; (会导致每天的执行时间根据唤醒时间后延)
+                    // 新逻辑：基于上一次的预期时间 (endTime) 累加，保持节奏（例如总是 10:40）
+                    // 如果错过太多（比如电脑关机了3天），需要累加多次直到追赶到未来时间
+                    let nextTime = st.endTime || now;
+                    // 安全防护：如果 endTime 异常小（比如数据错误），重置为 now
+                    if (nextTime < now - (totalMs * 100)) nextTime = now;
+
+                    // 核心修改：确保下一次时间一定要在未来，防止死循环或立即重发
+                    // 使用 while (nextTime <= now + 1000) 确保至少有1秒的缓冲
+                    while (nextTime <= now + 1000) {
+                        nextTime += totalMs;
+                    }
                     
-                    nextStates[r.id] = { timeLeft: totalMs / 1000, endTime: nextTime };
+                    nextStates[r.id] = { timeLeft: Math.ceil((nextTime - now) / 1000), endTime: nextTime };
                     remindersToUpdate.push({ id: r.id, nextTime });
                 } else {
                     nextStates[r.id] = { timeLeft: 0, endTime: null };
@@ -930,11 +941,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     if (diff <= 0) { 
                         // Main Timer Sleep/Wake Check
                         let shouldAlertMain = true;
+                        const isHeavilyOverdueMain = diff < -10;
                         
-                        if (systemSlept) {
+                        if (systemSlept || isHeavilyOverdueMain) {
                             shouldAlertMain = false;
                         }
-                        if (Math.abs(diff) > 5) {
+                        if (Math.abs(diff) > 5 && !shouldAlertMain) {
                             shouldAlertMain = false;
                         }
 

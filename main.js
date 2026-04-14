@@ -153,8 +153,7 @@ function createOrUpdateNotificationWindow(id, data) {
         
         entry.win.setOpacity(0);
         entry.win.webContents.send('notification-data-response', data);
-        entry.win.show();
-        entry.win.restore(); 
+        entry.win.showInactive();
         
         updateWindowPosition(entry.win, entry.type);
 
@@ -210,7 +209,7 @@ function createOrUpdateNotificationWindow(id, data) {
 
     win.once('ready-to-show', () => {
         win.setOpacity(0);
-        win.show();
+        win.showInactive();
         
         setTimeout(() => {
             if (!win.isDestroyed()) {
