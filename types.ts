@@ -48,6 +48,8 @@ export interface AppSettings {
   activeHoursRanges: TimeRange[];
   workMode: WorkMode;
   isBigWeek: boolean; // true = Big Week (Work Sat), false = Small Week (Rest Sat)
+  autoToggleBigSmallWeek: boolean;
+  lastWeekNumber?: number; // Absolute week number to track toggles
   skipHolidays: boolean;
 
   audioVolume: number;

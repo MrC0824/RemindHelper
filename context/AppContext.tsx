@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { AppSettings, AppStatus, TimeRange, SoundProfile, CustomReminder, ReminderType, UpdateStatus, UpdateInfo } from '@/types';
-import { isWithinActiveHours, generateId, updateHolidays, isWorkDay } from '@/utils/timeUtils';
+import { isWithinActiveHours, generateId, updateHolidays, isWorkDay, getAbsoluteWeekNumber } from '@/utils/timeUtils';
 import { saveAudioFile, getAudioFile, deleteAudioFile } from '@/utils/audioStorage';
 
 // Helper to safely access Electron IPC
@@ -83,6 +83,7 @@ const defaultSettings: AppSettings = {
   ],
   workMode: 'everyday',
   isBigWeek: false, 
+  autoToggleBigSmallWeek: true,
   skipHolidays: true,
   customReminders: [],
   audioVolume: 1,
@@ -104,7 +105,7 @@ export const useApp = () => {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [settings, setSettings] = useState<AppSettings>(() => {
+  const loadSettingsFromStorage = useCallback(() => {
     const saved = localStorage.getItem('app_settings');
     if (saved) {
       try {
@@ -134,6 +135,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (typeof merged.isMiniMode !== 'boolean') merged.isMiniMode = defaultSettings.isMiniMode;
         if (!merged.workMode) merged.workMode = 'everyday';
         if (typeof merged.isBigWeek !== 'boolean') merged.isBigWeek = true;
+        if (typeof merged.autoToggleBigSmallWeek !== 'boolean') merged.autoToggleBigSmallWeek = true;
+        
+        // Auto-toggle logic during hydration/load
+        if (merged.autoToggleBigSmallWeek) {
+             const currentAbsoluteWeek = getAbsoluteWeekNumber();
+             if (merged.lastWeekNumber !== undefined && merged.lastWeekNumber !== currentAbsoluteWeek) {
+                 const weeksPassed = Math.abs(currentAbsoluteWeek - merged.lastWeekNumber);
+                 if (weeksPassed > 0) {
+                     // If an odd number of weeks has passed, toggle the boolean
+                     if (weeksPassed % 2 !== 0) {
+                         merged.isBigWeek = !merged.isBigWeek;
+                     }
+                     merged.lastWeekNumber = currentAbsoluteWeek;
+                 }
+             } else if (merged.lastWeekNumber === undefined) {
+                 merged.lastWeekNumber = currentAbsoluteWeek;
+             }
+        }
+        
         if (typeof merged.skipHolidays !== 'boolean') merged.skipHolidays = true;
         if (!merged.theme || merged.theme === 'system' as any) merged.theme = 'dark';
         if (!merged.globalShortcut) merged.globalShortcut = '';
@@ -142,7 +162,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch (e) { return defaultSettings; }
     }
     return defaultSettings;
-  });
+  }, []);
+
+  const [settings, setSettings] = useState<AppSettings>(() => loadSettingsFromStorage());
 
   const [status, setStatus] = useState<AppStatus>('idle');
   
@@ -361,6 +383,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (settings.theme === 'dark') root.classList.add('dark');
     else root.classList.remove('dark');
   }, [settings.theme]);
+
+  useEffect(() => {
+    if (isNotificationMode) return;
+    
+    const handleSync = () => {
+      const freshSettings = loadSettingsFromStorage();
+      // Only update if there's a practical difference to avoid unnecessary re-renders
+      // However, for manual edits in DevTools, we usually want to force it.
+      // We can do a simple stringified comparison for efficiency.
+      setSettings(prev => {
+        const currentJson = JSON.stringify(prev);
+        const freshJson = JSON.stringify(freshSettings);
+        if (currentJson !== freshJson) {
+           console.log("[AppContext] Syncing settings from storage (detected change)");
+           return freshSettings;
+        }
+        return prev;
+      });
+    };
+
+    window.addEventListener('focus', handleSync);
+    window.addEventListener('storage', handleSync);
+    
+    return () => {
+      window.removeEventListener('focus', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, [loadSettingsFromStorage]);
 
   useEffect(() => {
     if (isNotificationMode) return; 
@@ -748,6 +798,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Calculate delta using the persisted ref
         const delta = now - lastTickRef.current;
         lastTickRef.current = now; // Update immediately
+        
+        // Auto toggle big/small week periodically if it's enabled and crossed a week boundary
+        if (settingsRef.current.activeHoursEnabled && settingsRef.current.workMode === 'big-small' && settingsRef.current.autoToggleBigSmallWeek) {
+            const currentAbsoluteWeek = getAbsoluteWeekNumber();
+            if (settingsRef.current.lastWeekNumber !== undefined && currentAbsoluteWeek !== settingsRef.current.lastWeekNumber) {
+                 const weeksPassed = Math.abs(currentAbsoluteWeek - settingsRef.current.lastWeekNumber);
+                 if (weeksPassed > 0) {
+                     let newIsBigWeek = settingsRef.current.isBigWeek;
+                     if (weeksPassed % 2 !== 0) {
+                         newIsBigWeek = !newIsBigWeek;
+                     }
+                     updateSettings({
+                         isBigWeek: newIsBigWeek,
+                         lastWeekNumber: currentAbsoluteWeek
+                     });
+                 }
+            } else if (settingsRef.current.lastWeekNumber === undefined) {
+                 updateSettings({ lastWeekNumber: currentAbsoluteWeek });
+            }
+        }
 
         // --- System Sleep Detection ---
         // 1. Tick Delta Check (Backup): If timer loop was paused for > 1000ms

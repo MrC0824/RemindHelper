@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
-import { generateId, formatDateTime, formatTime } from '@/utils/timeUtils';
+import { generateId, formatDateTime, formatTime, getAbsoluteWeekNumber } from '@/utils/timeUtils';
 import { CustomReminder, IntervalUnit, ReminderType, AppSettings, WorkMode } from '@/types';
 
 // Helper to access IPC
@@ -114,7 +114,7 @@ const CustomNumberInput = ({
     };
 
     return (
-        <div className={`relative group flex items-center ${className}`}>
+        <div className={`relative group flex items-center bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded focus-within:border-blue-500 overflow-hidden ${className}`}>
             <input
                 type="number"
                 value={value}
@@ -123,8 +123,8 @@ const CustomNumberInput = ({
                 onWheel={(e) => (e.target as HTMLInputElement).blur()}
                 placeholder={placeholder}
                 step={1} 
-                className="w-full h-full bg-transparent border-none focus:ring-0 px-0 text-inherit font-inherit focus:outline-none placeholder-slate-400 no-spinners"
-                style={{ paddingRight: '1.5rem' }}
+                className="w-full h-full bg-transparent border-none focus:ring-0 px-3 text-sm focus:outline-none placeholder-slate-400 no-spinners text-slate-800 dark:text-white"
+                style={{ paddingRight: '1.8rem' }}
             />
             
             <div className="absolute right-0 top-0 bottom-0 w-5 flex flex-col border-l border-gray-200 dark:border-slate-700">
@@ -197,7 +197,7 @@ const CustomSelect = ({
         <div ref={containerRef} className={`relative ${className || ''}`}>
             <div 
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full h-[38px] flex items-center cursor-pointer select-none bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 hover:border-blue-400 transition-colors ${align === 'left' ? 'justify-start' : 'justify-center'}`}
+                className={`w-full h-[38px] flex items-center cursor-pointer select-none bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-1.5 sm:px-3 hover:border-blue-400 transition-colors ${align === 'left' ? 'justify-start' : 'justify-center'}`}
             >
                 <span className={`font-medium text-sm truncate ${isOpen ? 'text-blue-600 dark:text-blue-400' : 'text-slate-800 dark:text-white'}`}>
                     {currentLabel}
@@ -921,7 +921,7 @@ export const SettingsPanel: React.FC = () => {
         </div>
         
         {newReminderType === 'interval' ? (
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full">
                 <CustomNumberInput 
                     value={newReminderValue}
                     onChange={(val) => {
@@ -934,25 +934,27 @@ export const SettingsPanel: React.FC = () => {
                     min={1}
                     max={99999}
                     placeholder="间隔时长"
-                    className="flex-1 h-[38px] bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 text-sm focus-within:border-blue-500 text-slate-800 dark:text-white"
+                    className="flex-[3] min-w-[90px] h-[38px]"
                 />
-                <CustomSelect 
-                    value={newReminderUnit}
-                    onChange={(val) => setNewReminderUnit(val as IntervalUnit)}
-                    options={[
-                        { label: '秒', value: 'seconds' },
-                        { label: '分钟', value: 'minutes' },
-                        { label: '小时', value: 'hours' },
-                    ]}
-                    className="w-24"
-                />
-                <button 
-                        onClick={saveCustomReminder}
-                        disabled={!isFormValid}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                    {editingId ? '保存' : '添加'}
-                </button>
+                <div className="flex gap-2 shrink-0 flex-[2]">
+                    <CustomSelect 
+                        value={newReminderUnit}
+                        onChange={(val) => setNewReminderUnit(val as IntervalUnit)}
+                        options={[
+                            { label: '秒', value: 'seconds' },
+                            { label: '分钟', value: 'minutes' },
+                            { label: '小时', value: 'hours' },
+                        ]}
+                        className="flex-1 min-w-[64px]"
+                    />
+                    <button 
+                            onClick={saveCustomReminder}
+                            disabled={!isFormValid}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 h-[38px] rounded text-sm font-medium shrink-0 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95 shadow-sm min-w-[54px]"
+                    >
+                        {editingId ? '保存' : '添加'}
+                    </button>
+                </div>
             </div>
         ) : (
             <div className="flex gap-2">
@@ -1150,7 +1152,7 @@ export const SettingsPanel: React.FC = () => {
                             }} 
                             min={1} 
                             max={99999} 
-                            className="w-full h-[38px] bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded px-3 text-slate-800 dark:text-slate-200 focus-within:border-blue-500" 
+                            className="w-full h-[38px]" 
                         />
                     </div>
                     <div>
@@ -1284,30 +1286,57 @@ export const SettingsPanel: React.FC = () => {
                             </div>
 
                             {settings.workMode === 'big-small' && (
-                                <div className="flex items-center justify-between gap-3 h-[38px] px-3 bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700/50">
-                                    <span className="text-xs text-slate-500 font-medium shrink-0">当前周状态</span>
-                                    <div className="flex gap-2 ml-auto">
-                                        <button 
-                                            onClick={() => updateSettings({ isBigWeek: true })} 
-                                            className={`py-1.5 px-3 rounded-lg border text-xs font-medium transition-all shrink-0 ${
-                                                settings.isBigWeek 
-                                                ? 'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-400' 
-                                                : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700'
-                                            }`}
-                                        >
-                                            大周 (周六班)
-                                        </button>
-                                        <button 
-                                            onClick={() => updateSettings({ isBigWeek: false })} 
-                                            className={`py-1.5 px-3 rounded-lg border text-xs font-medium transition-all shrink-0 ${
-                                                !settings.isBigWeek 
-                                                ? 'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-400' 
-                                                : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700'
-                                            }`}
-                                        >
-                                            小周 (周六休)
-                                        </button>
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex items-center gap-2 sm:gap-3 h-auto sm:h-[42px] px-2 sm:px-3 py-1.5 sm:py-0 bg-white dark:bg-slate-800 rounded border border-gray-200 dark:border-slate-700/50 shadow-sm overflow-hidden">
+                                        <span className="text-[11px] sm:text-xs text-slate-500 font-medium shrink-0">当前周状态</span>
+                                        <div className="flex gap-1 sm:gap-2 ml-auto min-w-0 flex-1 justify-end">
+                                            <button 
+                                                onClick={() => {
+                                                    updateSettings({ 
+                                                        isBigWeek: true,
+                                                        lastWeekNumber: getAbsoluteWeekNumber()
+                                                    });
+                                                }} 
+                                                className={`flex-1 sm:flex-none py-1.5 px-2 sm:px-3 rounded-lg border text-[10px] sm:text-xs font-medium transition-all min-w-0 ${
+                                                    settings.isBigWeek 
+                                                    ? 'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-400' 
+                                                    : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700'
+                                                }`}
+                                            >
+                                                <span className="truncate block">大周 (周六班)</span>
+                                            </button>
+                                            <button 
+                                                onClick={() => {
+                                                    updateSettings({ 
+                                                        isBigWeek: false,
+                                                        lastWeekNumber: getAbsoluteWeekNumber()
+                                                    });
+                                                }} 
+                                                className={`flex-1 sm:flex-none py-1.5 px-2 sm:px-3 rounded-lg border text-[10px] sm:text-xs font-medium transition-all min-w-0 ${
+                                                    !settings.isBigWeek 
+                                                    ? 'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-400' 
+                                                    : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700'
+                                                }`}
+                                            >
+                                                <span className="truncate block">小周 (周六休)</span>
+                                            </button>
+                                        </div>
                                     </div>
+                                    <label className="hidden items-center gap-2 px-1 cursor-pointer w-max group mt-1">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-4 h-4 rounded-sm border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 focus:ring-offset-0 bg-transparent dark:border-slate-600 dark:bg-slate-800"
+                                            checked={settings.autoToggleBigSmallWeek}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                updateSettings({ 
+                                                    autoToggleBigSmallWeek: checked,
+                                                    lastWeekNumber: checked ? getAbsoluteWeekNumber() : undefined
+                                                });
+                                            }}
+                                        />
+                                        <span className="text-xs text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200 transition-colors">自动轮询大小周</span>
+                                    </label>
                                 </div>
                             )}
 

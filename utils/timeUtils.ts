@@ -227,3 +227,15 @@ export const isWithinActiveHours = (ranges: TimeRange[]): boolean => {
 export const generateId = (): string => {
   return Math.random().toString(36).substring(2, 9);
 };
+
+export const getAbsoluteWeekNumber = (): number => {
+  const d = new Date();
+  const day = d.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diffToMonday);
+  monday.setHours(0, 0, 0, 0);
+  const epochMonday = new Date(1970, 0, 5);
+  epochMonday.setHours(0, 0, 0, 0);
+  const diffMs = monday.getTime() - epochMonday.getTime();
+  return Math.floor(diffMs / (86400000 * 7));
+};
