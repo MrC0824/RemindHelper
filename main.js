@@ -153,7 +153,11 @@ function createOrUpdateNotificationWindow(id, data) {
         
         entry.win.setOpacity(0);
         entry.win.webContents.send('notification-data-response', data);
+        
+        // 核心修复：确保窗口在显示时处于最前端
         entry.win.showInactive();
+        entry.win.setAlwaysOnTop(true, 'screen-saver');
+        entry.win.moveTop();
         
         updateWindowPosition(entry.win, entry.type);
 
@@ -209,7 +213,10 @@ function createOrUpdateNotificationWindow(id, data) {
 
     win.once('ready-to-show', () => {
         win.setOpacity(0);
+        // 核心修复：确保初始显示时处于最前端
         win.showInactive();
+        win.setAlwaysOnTop(true, 'screen-saver');
+        win.moveTop();
         
         setTimeout(() => {
             if (!win.isDestroyed()) {

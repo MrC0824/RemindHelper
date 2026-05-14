@@ -404,7 +404,9 @@ const StandaloneNotification: React.FC = () => {
                 @keyframes slideFadeIn { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
                 @keyframes slideFadeOut { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(20px); } }
                 @keyframes slide-up { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+                @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.5); } 70% { box-shadow: 0 0 0 15px rgba(37, 99, 235, 0); } 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); } }
                 .animate-fade-in { animation: slideFadeIn 0.3s cubic-bezier(0.2, 0.0, 0.2, 1) forwards; will-change: transform, opacity; }
+                .notification-pulse { animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
                 .animate-fade-out { animation: slideFadeOut 0.25s cubic-bezier(0.2, 0.0, 0.2, 1) forwards; will-change: transform, opacity; }
                 .animate-slide-up { animation: slide-up 0.3s ease-out forwards; }
                 @keyframes ring { 0% { transform: rotate(0); } 10% { transform: rotate(15deg); } 20% { transform: rotate(-15deg); } 30% { transform: rotate(15deg); } 40% { transform: rotate(-15deg); } 50% { transform: rotate(0); } 100% { transform: rotate(0); } }
@@ -414,7 +416,7 @@ const StandaloneNotification: React.FC = () => {
             `}</style>
             <div 
                 key={animationKey} // 仅在数据更新时重置动画，关闭时不重置
-                className={`rounded-3xl w-full h-full relative flex flex-col outline-none ${isClosing ? 'animate-fade-out' : 'animate-fade-in'} ${isDark ? 'bg-slate-900' : 'bg-white'}`}
+                className={`rounded-3xl w-full h-full relative flex flex-col outline-none shadow-2xl border-2 ${isClosing ? 'animate-fade-out' : 'animate-fade-in notification-pulse'} ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'}`}
                 style={{ cursor: isDragging ? 'grabbing' : 'grab' } as React.CSSProperties}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                 onMouseDown={handleMouseDown}
