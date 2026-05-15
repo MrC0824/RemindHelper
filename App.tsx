@@ -404,9 +404,20 @@ const StandaloneNotification: React.FC = () => {
                 @keyframes slideFadeIn { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
                 @keyframes slideFadeOut { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(20px); } }
                 @keyframes slide-up { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-                @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.5); } 70% { box-shadow: 0 0 0 15px rgba(37, 99, 235, 0); } 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); } }
+                @keyframes window-shake { 0%, 20%, 100% { transform: translateX(0); } 2%, 6%, 10%, 14%, 18% { transform: translateX(-3px); } 4%, 8%, 12%, 16% { transform: translateX(3px); } }
+                @keyframes pulse-ring { 
+                    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } 
+                    50% { 
+                        box-shadow: 
+                            0 0 8px 4px rgba(239, 68, 68, 0.3), 
+                            0 0 10px 8px rgba(234, 179, 8, 0.25), 
+                            0 0 12px 12px rgba(34, 197, 94, 0.2), 
+                            0 0 15px 15px rgba(59, 130, 246, 0); 
+                    }
+                    100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } 
+                }
                 .animate-fade-in { animation: slideFadeIn 0.3s cubic-bezier(0.2, 0.0, 0.2, 1) forwards; will-change: transform, opacity; }
-                .notification-pulse { animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+                .notification-attention { animation: window-shake 3s cubic-bezier(0.4, 0, 0.6, 1) infinite, pulse-ring 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
                 .animate-fade-out { animation: slideFadeOut 0.25s cubic-bezier(0.2, 0.0, 0.2, 1) forwards; will-change: transform, opacity; }
                 .animate-slide-up { animation: slide-up 0.3s ease-out forwards; }
                 @keyframes ring { 0% { transform: rotate(0); } 10% { transform: rotate(15deg); } 20% { transform: rotate(-15deg); } 30% { transform: rotate(15deg); } 40% { transform: rotate(-15deg); } 50% { transform: rotate(0); } 100% { transform: rotate(0); } }
@@ -416,7 +427,7 @@ const StandaloneNotification: React.FC = () => {
             `}</style>
             <div 
                 key={animationKey} // 仅在数据更新时重置动画，关闭时不重置
-                className={`rounded-3xl w-full h-full relative flex flex-col outline-none shadow-2xl border-2 ${isClosing ? 'animate-fade-out' : 'animate-fade-in notification-pulse'} ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'}`}
+                className={`rounded-3xl w-full h-full relative flex flex-col outline-none shadow-2xl border-2 ${isClosing ? 'animate-fade-out' : 'animate-fade-in notification-attention'} ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'}`}
                 style={{ cursor: isDragging ? 'grabbing' : 'grab' } as React.CSSProperties}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                 onMouseDown={handleMouseDown}
