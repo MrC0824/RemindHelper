@@ -1016,7 +1016,7 @@ export const SettingsPanel: React.FC = () => {
             </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-8 pb-24">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-8 pb-10">
             
             {/* 1. 系统 (合并了原外观、自启动、快捷键) */}
             <div className="space-y-4">
