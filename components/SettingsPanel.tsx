@@ -693,51 +693,116 @@ export const SettingsPanel: React.FC = () => {
       setAlertMsg(null);
       if (!newReminderTitle.trim()) return;
       
-      let targetTime: number | undefined;
       const intervalVal = newReminderValue === '' ? 0 : newReminderValue;
 
-      if (newReminderType === 'onetime') {
-          if (!newReminderDateTime) return;
-          targetTime = new Date(newReminderDateTime).getTime();
-          if (targetTime < Date.now()) {
-              setAlertMsg('请选择一个未来的时间');
-              return;
-          }
-      } else {
-          if (intervalVal <= 0) {
-              setAlertMsg('间隔时间必须大于0');
-              return;
-          }
-      }
-
-      let nextTriggerTime: number | undefined;
-      if (newReminderType === 'interval' && intervalVal > 0) {
-          let multiplier = 60;
-          if (newReminderUnit === 'hours') multiplier = 3600;
-          if (newReminderUnit === 'seconds') multiplier = 1;
-          nextTriggerTime = Date.now() + intervalVal * multiplier * 1000;
-      }
-
       if (editingId) {
+          const existing = settings.customReminders.find(r => r.id === editingId);
+          if (!existing) {
+              cancelEdit();
+              return;
+          }
+
+          const typeChanged = existing.type !== newReminderType;
+          let timeChanged = false;
+          let targetTime: number | undefined;
+          let nextTriggerTime: number | undefined;
+
+          if (newReminderType === 'interval') {
+              if (intervalVal <= 0) {
+                  setAlertMsg('间隔时间必须大于0');
+                  return;
+              }
+              const isSameValue = Number(existing.intervalValue) === Number(intervalVal);
+              const isSameUnit = (existing.intervalUnit || 'minutes') === newReminderUnit;
+              timeChanged = typeChanged || !isSameValue || !isSameUnit;
+
+              if (timeChanged) {
+                  let multiplier = 60;
+                  if (newReminderUnit === 'hours') multiplier = 3600;
+                  if (newReminderUnit === 'seconds') multiplier = 1;
+                  nextTriggerTime = Date.now() + intervalVal * multiplier * 1000;
+              } else {
+                  nextTriggerTime = existing.nextTriggerTime;
+              }
+          } else {
+              // onetime 定点提醒
+              if (!newReminderDateTime) return;
+              const parsedTime = new Date(newReminderDateTime).getTime();
+              if (isNaN(parsedTime)) return;
+
+              const originalMinute = existing.targetDateTime ? Math.floor(existing.targetDateTime / 60000) : null;
+              const newMinute = Math.floor(parsedTime / 60000);
+              timeChanged = typeChanged || originalMinute !== newMinute;
+
+              if (timeChanged) {
+                  if (parsedTime < Date.now()) {
+                      setAlertMsg('请选择一个未来的时间');
+                      return;
+                  }
+                  targetTime = parsedTime;
+              } else {
+                  targetTime = existing.targetDateTime;
+              }
+          }
+
           const updatedReminders = settings.customReminders.map(r => {
               if (r.id === editingId) {
-                  return {
-                      ...r,
-                      title: newReminderTitle,
-                      type: newReminderType,
-                      intervalValue: newReminderType === 'interval' ? intervalVal : undefined,
-                      intervalUnit: newReminderType === 'interval' ? newReminderUnit : undefined,
-                      targetDateTime: targetTime,
-                      nextTriggerTime: newReminderType === 'interval' ? nextTriggerTime : undefined,
-                      pausedRemainingTime: undefined,
-                      enabled: true 
-                  };
+                  if (newReminderType === 'interval') {
+                      return {
+                          ...r,
+                          title: newReminderTitle,
+                          type: 'interval' as ReminderType,
+                          intervalValue: intervalVal,
+                          intervalUnit: newReminderUnit,
+                          targetDateTime: undefined,
+                          nextTriggerTime,
+                          pausedRemainingTime: timeChanged ? undefined : r.pausedRemainingTime,
+                          enabled: timeChanged ? true : r.enabled
+                      };
+                  } else {
+                      return {
+                          ...r,
+                          title: newReminderTitle,
+                          type: 'onetime' as ReminderType,
+                          intervalValue: undefined,
+                          intervalUnit: undefined,
+                          targetDateTime: targetTime,
+                          nextTriggerTime: timeChanged ? undefined : r.nextTriggerTime,
+                          pausedRemainingTime: timeChanged ? undefined : r.pausedRemainingTime,
+                          enabled: timeChanged ? true : r.enabled
+                      };
+                  }
               }
               return r;
           });
+
           updateSettings({ customReminders: updatedReminders });
           cancelEdit();
       } else {
+          // 新增提醒
+          let targetTime: number | undefined;
+          if (newReminderType === 'onetime') {
+              if (!newReminderDateTime) return;
+              targetTime = new Date(newReminderDateTime).getTime();
+              if (isNaN(targetTime) || targetTime < Date.now()) {
+                  setAlertMsg('请选择一个未来的时间');
+                  return;
+              }
+          } else {
+              if (intervalVal <= 0) {
+                  setAlertMsg('间隔时间必须大于0');
+                  return;
+              }
+          }
+
+          let nextTriggerTime: number | undefined;
+          if (newReminderType === 'interval' && intervalVal > 0) {
+              let multiplier = 60;
+              if (newReminderUnit === 'hours') multiplier = 3600;
+              if (newReminderUnit === 'seconds') multiplier = 1;
+              nextTriggerTime = Date.now() + intervalVal * multiplier * 1000;
+          }
+
           const newReminder: CustomReminder = {
               id: generateId(),
               title: newReminderTitle,
